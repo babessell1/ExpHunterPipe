@@ -119,7 +119,7 @@ rule run_expansion_hunter:
         vcf=STUDY.assign_vcf(),
         json=STUDY.assign_json()
     params:
-        out_dir=config["OUT_DIR"]
+        out_dir=config["OUT_DIR"],
         var_cat=config["VAR_CAT_LOC"],
         groups=STUDY.groups,
         reps=STUDY.replicates,
