@@ -1,0 +1,10 @@
+EXP_HUNT_LOC: "/home/bbessell/software/ExpansionHunter/bin/ExpansionHunter"
+OUT_DIR: "/scratch/remills_root/remills99/bbessell/test_1000g/data/out/"
+STUDY_DIR: "/scratch/remills_root/remills99/bbessell/test_1000g/data/genomes/vol1/ftp/data_collections/1000_genomes_project/data/"
+REFERENCE_GENOME: "/scratch/remills_root/remills99/bbessell/test_1000g/data/genomes/reference/Homo_sapiens.GRCh38.dna.primary_assembly.fa"
+VAR_CAT: "/scratch/remills_root/remills99/bbessell/test_1000g/data/variant_catlog.json"
+
+SAMPLE_CONFIG:
+    PROVIDE_SAMPLE_FILE: True
+    SAMPLE_FILE_PATH: "/scratch/remills_root/remills99/bbessell/test_1000g/samples_file_test.csv"
+
