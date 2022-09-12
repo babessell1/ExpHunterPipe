@@ -58,53 +58,68 @@ class Study:
         sdf.columns  = ["filename", "rep_id", "grp_id"]
         print("are u my type? ", type(sdf.iloc[:, 1]))
             
-        return sdf.iloc[:, 1], sdf.iloc[:, 2], sdf.iloc[:, 3]
+        return sdf.iloc[:, 0].tolist(), sdf.iloc[:, 1].tolist(), sdf.iloc[:, 2].tolist()
 
     def make_dirs(self) -> None:
-        os.mkdir(self.outdir, exist_ok=True)
+        os.makedirs(self.outdir, exist_ok=True)
         for group, rep in zip(self.groups, self.replicates):
-            os.mkdir(os.path.join(self.outdir, group), exist_ok=True)
-            os.mkdir(os.path.join(self.outdir,group, rep),exist_ok=True)
-        
+            os.makedirs(os.path.join(self.outdir, group), exist_ok=True)
+            os.makedirs(os.path.join(self.outdir,group, rep),exist_ok=True)
+
         return
 
     def assign_checkfiles(self) -> list[str]:
-        return [os.path.join(group, rep, f"{group}_{rep}_check.txt") for group, rep in zip(self.groups, self.rep)]
+        return [os.path.join(
+                self.outdir, rep, f"{group}_{rep}_check.txt"
+            ) for group, rep in zip(self.groups, self.replicates)
+        ]
 
     def assign_realign_bams(self) -> list[str]:
-        return [os.path.join(group, rep, f"{group}_{rep}_realigned.bam") for group, rep in zip(self.groups, self.rep)]
+        return [
+            os.path.join(
+                self.outdir, group, rep, f"{group}_{rep}_realigned.bam"
+            ) for group, rep in zip(self.groups, self.replicates)
+        ]
 
     def assign_vcf(self) -> list[str]:
-        return [os.path.join(group, rep, f"{group}_{rep}_repeats.vcf") for group, rep in zip(self.groups, self.rep)]
+        return [
+            os.path.join(
+                self.outdir, group, rep, f"{group}_{rep}_repeats.vcf"
+            ) for group, rep in zip(self.groups, self.replicates)
+        ]
 
     def assign_json(self) -> list[str]:
-        return [os.path.join(group, rep, f"{group}_{rep}_repeats.json") for group, rep in zip(self.groups, self.rep)]
+        return [
+            os.path.join(
+                self.outdir, group, rep, f"{group}_{rep}_repeats.json"
+            ) for group, rep in zip(self.groups, self.replicates)
+        ]
 
 
 if config["STUDY_CONFIG"]["PROVIDE_STUDY_FILE"]:
-    STUDY = Study(config["STUDY_CONFIG"]["STUDY_FILE_PATH"])
+    STUDY = Study(config["STUDY_CONFIG"]["STUDY_FILE_PATH"], config["OUT_DIR"])
     rule_all = []
 else:  # TODO: prepose w/ rule to generate study file if set gets too big
     rule_all = [os.path.join(os.path.join(config["OUT_DIR"], config["STUDY_CONFIG"]["STUDY_FILE_PATH"]))]
 
 rule_all.extend([
     expand(
-        os.path.join(config["OUT_DIR"], "{groups}", "{reps}", "{groups}_{reps}.bam"),
+        os.path.join(config["OUT_DIR"], "{groups}", "{reps}", "{groups}_{reps}_realigned.bam"),
         zip,
         groups=STUDY.groups,
-        reps=STUDY.reps
+        reps=STUDY.replicates
     ),
     expand(
-        os.path.join(config["OUT_DIR"], "{groups}", "{reps}", "{groups}_{reps}.vcf"),
+        os.path.join(config["OUT_DIR"], "{groups}", "{reps}", "{groups}_{reps}_repeats.vcf"),
         zip,
         groups=STUDY.groups,
-        reps=STUDY.reps
+        reps=STUDY.replicates
     ),
     expand(
-        os.path.join(config["OUT_DIR"],"{groups}","{reps}","{groups}_{reps}.json"),
+        os.path.join(config["OUT_DIR"],"{groups}","{reps}","{groups}_{reps}_repeats.json"),
         zip,
         groups=STUDY.groups,
-        reps=STUDY.reps
+        reps=STUDY.replicates
     )
 ])
 
@@ -113,30 +128,48 @@ rule all:
 
 
 rule run_expansion_hunter:
-    input: STUDY.filenames,
+    input:
+        os.path.join(
+            config["STUDY_DIR"],
+            "{groups}",
+            "{reps}",
+            "high_cov_alignment",
+            "{reps}.alt_bwamem_GRCh38DH.20150917.{groups}.high_coverage.cram"
+        ),
     output: 
-        realign=STUDY.assign_realign_bams(),
-        vcf=STUDY.assign_vcf(),
-        json=STUDY.assign_json()
+        realign=os.path.join(config["OUT_DIR"], "{groups}", "{reps}", "{groups}_{reps}_realigned.bam"),
+        vcf=os.path.join(config["OUT_DIR"], "{groups}", "{reps}", "{groups}_{reps}_repeats.vcf"),
+        json=os.path.join(config["OUT_DIR"], "{groups}", "{reps}", "{groups}_{reps}_repeats.json")
     params:
         out_dir=config["OUT_DIR"],
-        var_cat=config["VAR_CAT_LOC"],
-        groups=STUDY.groups,
-        reps=STUDY.replicates,
+        var_cat=config["VAR_CAT"],
+        groups="{groups}",
+        reps="{reps}",
         exp_hunt_exec=config["EXP_HUNT_LOC"],
-        samp_dir=config["STUDY_DIR"] ,
-        ref_genome=config["REFERENCE_GENOME"]
-    threads: 16
+        samp_dir=config["STUDY_DIR"],
+        ref_genome=config["REFERENCE_GENOME"],
+        home_dir=config["HOME_DIR"]
+    threads: 4
+    resources:
+        mem_mb = 500
+
     shell:
         """
+        start=$SECONDS
         {params.exp_hunt_exec} \
-            --reads  "{params.samp_dir}/high_cov_alignment/{params.reps}.alt_bwamem_GRCh38DH.20150917.{params.groups}.high_coverage.cram" \
+            --reads  "{input}" \
             --reference "{params.ref_genome}" \
             --variant "{params.var_cat}" \
             --output-prefix "{params.reps}" \
             --analysis-mode streaming
             
-        mv {params.reps}.bam {params.out_dir}/{params.groups}/{params.reps}/{params.groups}_{params.reps}.bam
-        mv {params.reps}.vcf {params.out_dir}/{params.groups}/{params.reps}/{params.groups}_{params.reps}.vcf
-        mv {params.reps}.json {params.out_dir}/{params.groups}/{params.reps}/{params.groups}_{params.reps}.json
+        mv "{params.home_dir}/{params.reps}_realigned.bam" \
+            "{params.out_dir}/{params.groups}/{params.reps}/{params.groups}_{params.reps}_realigned.bam"
+        mv "{params.home_dir}/{params.reps}.vcf" \
+            "{params.out_dir}/{params.groups}/{params.reps}/{params.groups}_{params.reps}_repeats.vcf"
+        mv "{params.home_dir}/{params.reps}.json" \
+            "{params.out_dir}/{params.groups}/{params.reps}/{params.groups}_{params.reps}_repeats.json"
+        duration=$(( SECONDS - start ))
+        echo "TIME"
+        echo $duration
         """
